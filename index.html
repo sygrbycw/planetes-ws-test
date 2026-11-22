@@ -1,0 +1,299 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<!-- 検証用ページ。CSPを原因にしないため、Content-Security-Policy の meta は意図的に置かない。 -->
+<title>PLANETES WS Test</title>
+<style>
+  :root { color-scheme: dark; }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; padding: 20px 16px 48px;
+    background: #0b0b0b; color: #eee;
+    font: 15px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  }
+  main { max-width: 560px; margin: 0 auto; }
+  h1 { font-size: 20px; letter-spacing: .12em; margin: 0 0 4px; }
+  h2 { font-size: 15px; color: #bbb; margin: 24px 0 8px; }
+  p.note { color: #999; font-size: 13px; margin: 4px 0 0; }
+  .panel { background: #181818; border-radius: 14px; padding: 14px; }
+  dl { display: grid; grid-template-columns: max-content 1fr; gap: 4px 12px; margin: 0; font-size: 13px; }
+  dt { color: #999; }
+  dd { margin: 0; word-break: break-all; }
+  label { display: block; font-size: 13px; color: #bbb; margin: 8px 0 4px; }
+  input {
+    width: 100%; padding: 10px; font-size: 16px;
+    color: #fff; background: #262626; border: 1px solid #444; border-radius: 8px;
+  }
+  .row { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 12px; }
+  button {
+    flex: 1 1 140px; padding: 12px; font-size: 15px; border: 0; border-radius: 10px;
+    background: #e5e5e5; color: #111; font-weight: 600;
+  }
+  button.secondary { background: #333; color: #fff; font-weight: 400; }
+  button:disabled { opacity: .35; }
+  #result { font-size: 18px; font-weight: 700; padding: 12px; border-radius: 10px; background: #222; }
+  #result[data-kind="ok"] { background: #12371f; color: #8ef0a8; }
+  #result[data-kind="fail"], #result[data-kind="exception"] { background: #3d1515; color: #ff9d9d; }
+  #result[data-kind="timeout"] { background: #3a3010; color: #ffd76a; }
+  #log {
+    margin: 0; padding: 10px; background: #111; border-radius: 10px; min-height: 120px;
+    font: 12px/1.45 ui-monospace, Menlo, Consolas, monospace; white-space: pre-wrap; word-break: break-all;
+  }
+  .ok { color: #8ef0a8; } .err { color: #ff9d9d; } .warn { color: #ffd76a; }
+  textarea { width: 100%; height: 160px; margin-top: 8px; font: 11px monospace; color: #ddd; background: #111; }
+</style>
+</head>
+<body>
+<main>
+  <h1>PLANETES WS Test</h1>
+  <p class="note">HTTPSページからATOM LiteのWebSocketへ直接接続できるかだけを確認します。角度指令は送りません。</p>
+
+  <h2>1. ページ環境</h2>
+  <section class="panel">
+    <dl>
+      <dt>読込時刻</dt><dd id="loaded"></dd>
+      <dt>読込ID</dt><dd id="load-id"></dd>
+      <dt>URL</dt><dd id="href"></dd>
+      <dt>protocol</dt><dd id="protocol"></dd>
+      <dt>isSecureContext</dt><dd id="secure"></dd>
+      <dt>navigator.onLine</dt><dd id="online"></dd>
+      <dt>CSP meta</dt><dd id="csp-meta"></dd>
+      <dt>UserAgent</dt><dd id="ua"></dd>
+    </dl>
+    <p class="note">Wi-Fi切替後も「読込時刻」「読込ID」が変わっていなければ、ページは再読み込みされていません。</p>
+  </section>
+
+  <h2>2. 配信サーバーのレスポンスヘッダー</h2>
+  <section class="panel">
+    <div id="headers-summary">未取得</div>
+    <pre id="headers" class="note" style="white-space:pre-wrap;word-break:break-all"></pre>
+    <div class="row"><button id="check-headers" class="secondary">ヘッダーを再取得</button></div>
+    <p class="note">インターネット接続中（Wi-Fi切替前）に確認してください。自ページを再取得してヘッダーを表示します。</p>
+  </section>
+
+  <h2>3. WebSocket接続テスト</h2>
+  <section class="panel">
+    <label for="url">接続先</label>
+    <input id="url" value="ws://192.168.4.1:81" autocapitalize="off" autocorrect="off" spellcheck="false">
+    <label for="timeout">タイムアウト（ms）</label>
+    <input id="timeout" type="number" value="5000" min="500" step="500" inputmode="numeric">
+    <div class="row">
+      <button id="connect">接続テスト</button>
+      <button id="disconnect" class="secondary" disabled>切断</button>
+    </div>
+    <div class="row">
+      <button id="probe" class="secondary" disabled>無害メッセージ送信</button>
+    </div>
+    <p class="note">「無害メッセージ」は <code>{"probe":1}</code> です。ATOMのスケッチは "angle" を含まない文字列を拒否して <code>{"status":"error"}</code> を返すため、サーボは動きません。</p>
+    <h2>結果</h2>
+    <div id="result">未実行</div>
+  </section>
+
+  <h2>4. 補助テスト：HTTP取得（no-cors）</h2>
+  <section class="panel">
+    <div class="row"><button id="fetch-test" class="secondary">http://192.168.4.1/ を取得</button></div>
+    <p class="note">WebSocket以外のHTTP通信もMixed Contentとして拒否されるかの参考情報です。単独では原因の断定に使いません。</p>
+  </section>
+
+  <h2>ログ</h2>
+  <pre id="log"></pre>
+  <div class="row">
+    <button id="copy" class="secondary">ログをコピー</button>
+    <button id="clear" class="secondary">ログを消去</button>
+  </div>
+  <textarea id="copy-area" hidden readonly></textarea>
+</main>
+
+<script>
+'use strict';
+const $ = (id) => document.getElementById(id);
+const loadedAt = new Date();
+const loadId = Math.random().toString(36).slice(2, 8);
+const logEl = $('log');
+const lines = [];
+let ws = null;
+let attempt = 0;
+
+function stamp() {
+  const d = new Date();
+  return d.toTimeString().slice(0, 8) + '.' + String(d.getMilliseconds()).padStart(3, '0');
+}
+
+function log(text, kind = '') {
+  const line = '[' + stamp() + '] ' + text;
+  lines.push(line);
+  const span = document.createElement('span');
+  if (kind) span.className = kind;
+  span.textContent = line + '\n';
+  logEl.append(span);
+}
+
+function setResult(kind, text) {
+  $('result').dataset.kind = kind;
+  $('result').textContent = text;
+}
+
+function renderEnv() {
+  $('loaded').textContent = loadedAt.toLocaleString('ja-JP');
+  $('load-id').textContent = loadId;
+  $('href').textContent = location.href;
+  $('protocol').textContent = location.protocol;
+  $('secure').textContent = String(window.isSecureContext);
+  $('online').textContent = String(navigator.onLine);
+  const meta = document.querySelector('meta[http-equiv="Content-Security-Policy" i]');
+  $('csp-meta').textContent = meta ? 'あり: ' + meta.content : 'なし';
+  $('ua').textContent = navigator.userAgent;
+}
+
+async function checkHeaders() {
+  $('headers-summary').textContent = '取得中…';
+  try {
+    const response = await fetch(location.href, { cache: 'no-store' });
+    const entries = [...response.headers.entries()];
+    $('headers').textContent = 'HTTP ' + response.status + '\n' +
+      entries.map(([k, v]) => k + ': ' + v).join('\n');
+    const csp = response.headers.get('content-security-policy');
+    const cspRo = response.headers.get('content-security-policy-report-only');
+    const summary = (csp ? 'Content-Security-Policy ヘッダー: あり' : 'Content-Security-Policy ヘッダー: なし') +
+      (cspRo ? ' / Report-Only: あり' : '');
+    $('headers-summary').textContent = summary;
+    log('ヘッダー確認 HTTP ' + response.status + ' / ' + summary + (csp ? ' → ' + csp : ''), csp ? 'warn' : 'ok');
+  } catch (error) {
+    $('headers-summary').textContent = '取得失敗（オフラインの可能性）: ' + error.name;
+    log('ヘッダー確認失敗: ' + error.name + ': ' + error.message, 'warn');
+  }
+}
+
+function connect() {
+  if (ws && ws.readyState <= WebSocket.OPEN) {
+    log('既存の接続を閉じてから再試行します。', 'warn');
+    ws.close();
+  }
+  const url = $('url').value.trim();
+  const timeoutMs = Math.max(500, Number($('timeout').value) || 5000);
+  const id = ++attempt;
+  const t0 = performance.now();
+  const elapsed = () => Math.round(performance.now() - t0) + 'ms';
+  let opened = false;
+  let settled = false;
+  let timer;
+
+  const finish = (kind, text) => {
+    if (settled) return;
+    settled = true;
+    clearTimeout(timer);
+    setResult(kind, text);
+  };
+
+  log('── 試行#' + id + ' ' + url + '（onLine=' + navigator.onLine + ', timeout=' + timeoutMs + 'ms）');
+  setResult('', '接続中…');
+  let socket;
+  try {
+    socket = new WebSocket(url);
+  } catch (error) {
+    log('#' + id + ' コンストラクタ例外 ' + elapsed() + ': ' + error.name + ': ' + error.message, 'err');
+    finish('exception', '例外: ' + error.name + '（' + error.message + '）');
+    return;
+  }
+  ws = socket;
+  $('disconnect').disabled = false;
+  log('#' + id + ' WebSocket生成 readyState=' + socket.readyState);
+
+  timer = setTimeout(() => {
+    if (socket.readyState === WebSocket.CONNECTING) {
+      log('#' + id + ' タイムアウト ' + elapsed() + '（readyState=CONNECTING のまま）', 'warn');
+      finish('timeout', 'タイムアウト（' + timeoutMs + 'ms以内に接続できず）');
+      socket.close();
+    }
+  }, timeoutMs);
+
+  socket.onopen = () => {
+    opened = true;
+    log('#' + id + ' open ' + elapsed() + ' url=' + socket.url + ' protocol="' + socket.protocol + '"', 'ok');
+    finish('ok', '接続成功（' + elapsed() + '）');
+    if (ws === socket) $('probe').disabled = false;
+  };
+  socket.onerror = () => {
+    log('#' + id + ' error イベント ' + elapsed() + ' readyState=' + socket.readyState, 'err');
+  };
+  socket.onmessage = (event) => {
+    log('#' + id + ' 受信 ' + elapsed() + ': ' + String(event.data).slice(0, 200), 'ok');
+  };
+  socket.onclose = (event) => {
+    log('#' + id + ' close ' + elapsed() + ' code=' + event.code + ' reason="' + event.reason +
+      '" wasClean=' + event.wasClean, opened ? '' : 'err');
+    if (!opened) finish('fail', '接続失敗（close code ' + event.code + '、' + elapsed() + '）');
+    if (ws === socket) {
+      $('probe').disabled = true;
+      $('disconnect').disabled = true;
+    }
+  };
+}
+
+function sendProbe() {
+  if (!ws || ws.readyState !== WebSocket.OPEN) return log('未接続のため送信しません。', 'warn');
+  const message = '{"probe":1}';
+  ws.send(message);
+  log('送信: ' + message + '（角度指令ではありません）');
+}
+
+async function fetchTest() {
+  const target = 'http://192.168.4.1/';
+  const t0 = performance.now();
+  log('── 補助: fetch ' + target + ' (no-cors)');
+  try {
+    const response = await fetch(target, { mode: 'no-cors', cache: 'no-store' });
+    log('補助: 応答あり ' + Math.round(performance.now() - t0) + 'ms type=' + response.type, 'ok');
+  } catch (error) {
+    log('補助: 失敗 ' + Math.round(performance.now() - t0) + 'ms ' + error.name + ': ' + error.message, 'err');
+  }
+}
+
+async function copyLog() {
+  const text = [
+    'PLANETES WS Test log',
+    'loaded=' + loadedAt.toISOString() + ' id=' + loadId,
+    'href=' + location.href + ' secure=' + window.isSecureContext,
+    'ua=' + navigator.userAgent,
+    $('headers-summary').textContent,
+    ...lines,
+  ].join('\n');
+  try {
+    await navigator.clipboard.writeText(text);
+    log('ログをコピーしました。', 'ok');
+  } catch {
+    const area = $('copy-area');
+    area.hidden = false;
+    area.value = text;
+    area.select();
+    log('自動コピー不可。下の欄を長押ししてコピーしてください。', 'warn');
+  }
+}
+
+document.addEventListener('securitypolicyviolation', (event) => {
+  log('CSP違反: directive=' + event.violatedDirective + ' blocked=' + event.blockedURI, 'err');
+});
+window.addEventListener('online', () => { renderEnv(); log('online イベント'); });
+window.addEventListener('offline', () => { renderEnv(); log('offline イベント', 'warn'); });
+document.addEventListener('visibilitychange', () => {
+  renderEnv();
+  log('visibility: ' + document.visibilityState);
+});
+window.addEventListener('pageshow', (event) => log('pageshow persisted=' + event.persisted));
+
+$('connect').addEventListener('click', connect);
+$('disconnect').addEventListener('click', () => ws && ws.close(1000, 'user'));
+$('probe').addEventListener('click', sendProbe);
+$('fetch-test').addEventListener('click', fetchTest);
+$('check-headers').addEventListener('click', checkHeaders);
+$('copy').addEventListener('click', copyLog);
+$('clear').addEventListener('click', () => { lines.length = 0; logEl.textContent = ''; });
+
+renderEnv();
+log('ページ読込 id=' + loadId + ' protocol=' + location.protocol + ' secure=' + window.isSecureContext);
+checkHeaders();
+</script>
+</body>
+</html>
