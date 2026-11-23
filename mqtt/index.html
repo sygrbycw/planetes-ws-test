@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<!-- 通信先を EMQX の WSS エンドポイントだけに制限する。スクリプト・スタイルは同一オリジンのファイルのみ。 -->
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; connect-src wss://rd6ce23e.ala.asia-southeast1.emqxsl.com:8084; base-uri 'none'; form-action 'none'">
+<meta name="referrer" content="no-referrer">
+<title>PLANETES MQTT Test</title>
+<link rel="stylesheet" href="./style.css">
+<script defer src="./vendor/mqtt-5.16.1.min.js" integrity="sha384-ilRYg/zm2XqUafLvBoGVk40UfNRnvUkYMy+e/JPo4YgsFR6X9Q3jYEkqFQXquX4r"></script>
+<script defer src="./app.js"></script>
+</head>
+<body>
+<main>
+  <h1>PLANETES MQTT Test</h1>
+  <p class="note">iPhone Safari → EMQX Cloud → ATOM Lite。ページを開いただけでは接続も送信もしません。</p>
+
+  <section class="panel">
+    <div class="status-row">
+      <span id="status" class="status" data-state="idle">未接続</span>
+      <span id="client-id" class="mono small"></span>
+    </div>
+    <dl class="info">
+      <dt>Broker</dt><dd class="mono" id="broker-url"></dd>
+      <dt>Username</dt><dd class="mono" id="username"></dd>
+      <dt>Topic</dt><dd class="mono" id="topic"></dd>
+      <dt>設定</dt><dd class="mono">MQTT 3.1.1 / QoS 0 / Retain false</dd>
+    </dl>
+    <label for="password">Password（planetes-web）</label>
+    <input id="password" type="password" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="毎回手入力（保存しません）">
+    <div class="row">
+      <button id="connect" type="button">接続</button>
+      <button id="disconnect" type="button" class="secondary" disabled>切断</button>
+    </div>
+  </section>
+
+  <section class="panel">
+    <h2>角度を送信</h2>
+    <div class="row">
+      <button type="button" class="angle" data-angle="75" disabled>75°</button>
+      <button type="button" class="angle" data-angle="90" disabled>90°</button>
+      <button type="button" class="angle" data-angle="105" disabled>105°</button>
+    </div>
+    <label for="angle">任意の角度（0〜180）</label>
+    <div class="row">
+      <input id="angle" type="text" inputmode="decimal" value="90" autocomplete="off">
+      <button id="send" type="button" disabled>送信</button>
+    </div>
+    <p id="angle-error" class="error" hidden></p>
+    <dl class="info">
+      <dt>最後の送信</dt><dd class="mono" id="last-payload">—</dd>
+      <dt>送信回数</dt><dd class="mono" id="sent-count">0</dd>
+    </dl>
+    <p class="note">MQTTX と比較する場合は、上の「最後の送信」と同じ文字列・同じ Topic・QoS 0・Retain オフで送信してください。</p>
+  </section>
+
+  <section class="panel">
+    <h2>ログ</h2>
+    <pre id="log" class="mono"></pre>
+    <div class="row">
+      <button id="clear-log" type="button" class="secondary">ログを消去</button>
+    </div>
+  </section>
+</main>
+</body>
+</html>
